@@ -1,0 +1,4 @@
+
+vm_name = "test"
+resource_group_name = "test"
+script = "b64value"

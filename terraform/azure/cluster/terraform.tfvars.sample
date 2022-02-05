@@ -1,0 +1,6 @@
+resource_group_name = "test-resource-group"
+aks_nodes = 5
+aks_node_type = "Standard_D4_v4"
+aks_node_disk_size = 80
+environment = "test"
+suffix = ""

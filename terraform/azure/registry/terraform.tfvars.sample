@@ -1,0 +1,3 @@
+registry_name = "tapcr"
+resource_group_name = "test-resource-group"
+region = "westcentralus"

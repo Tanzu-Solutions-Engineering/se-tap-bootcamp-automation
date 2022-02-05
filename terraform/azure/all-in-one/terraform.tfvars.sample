@@ -1,0 +1,9 @@
+region = "westcentralus"
+resource_group_name = "test-resource-group"
+main_resource_group_name = "test-resource-group"
+vm_name = "toolset-vm"
+base_domain = "replace.me"
+domain_prefix = "foo"
+aks_nodes = 5
+aks_node_type = "Standard_D4_v4"
+registry_name = "cr"

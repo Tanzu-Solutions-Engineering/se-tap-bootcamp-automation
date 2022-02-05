@@ -1,0 +1,4 @@
+vnet_cidr = "10.1.0.0/16"
+operator_subnet_cidr = "10.1.0.0/24"
+aks_subnet_cidr = "10.1.1.0/24"
+resource_group_name = "test-resource-group"

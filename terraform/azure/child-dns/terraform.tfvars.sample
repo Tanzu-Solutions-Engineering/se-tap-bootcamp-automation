@@ -1,0 +1,4 @@
+
+base_domain = "domain.com"
+domain_prefix = "prefix"
+resource_group_name = "resource-group"

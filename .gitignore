@@ -1,0 +1,25 @@
+# IDE
+.vscode/
+.history/
+
+# Terraform
+.terraform.lock.hcl
+.terraform.tfstate.lock.info
+.terraformrc
+.terraform/
+terraform.tfstate.*
+terraform.tfstate
+terraform.plan
+terraform.rc
+*.tfvars
+*.tfvars.backup
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.log
+config.azurerm.tfbackend
+# Miscellaneous
+creds.tmp
+dist/
+workshop-sshkeys/

@@ -1,0 +1,6 @@
+resource_group_name = "tooling"
+image_name = "testworkshop
+image_sku = "testworkshop"
+image_publisher = "testworkshop"
+image_offer = "testworkshop"
+gallery_name = "testworkshop"
