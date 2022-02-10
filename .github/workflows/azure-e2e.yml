@@ -1,0 +1,238 @@
+name: 'Create Workshop Environment (targeting Azure)'
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseDomain:
+        description: 'New DNS zone name to create (e.g., example.com)'
+        required: true
+      domainPrefix:
+        description: 'The subdomain name to create on the base domain, (e.g., tap-workshop)'
+        required: true
+      participantNumber:
+        description: 'Participant ID (any positive integer)'
+        required: true
+      aksNodes:
+        description: 'Minimum number of cluster worker nodes'
+        required: true
+        default: "3"
+      aksNodeType:
+        description: 'VM type to use for the nodes'
+        required: true
+      sigResourceGroup:
+        description: "the name of the resource group the shared image gallery is in"
+        required: true
+#Would be nice to use env vars but this doesn't work
+#https://github.com/actions/runner/issues/480
+# env:
+#   bastionName: participant-${{ github.event.inputs.participantNumber }}-vm
+#   mainDnsRg: main-workshop-dns
+#   participantRg: participant-${{ github.event.inputs.participantNumber }}
+#   action: create
+
+jobs:
+  create-participant-rg:
+    uses: ./.github/workflows/azure-resource-group.yml
+    with:
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-main-dns-rg:
+    uses: ./.github/workflows/azure-resource-group.yml
+    with:
+      resourceGroupName: main-workshop-dns
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-main-dns-zone:
+    uses: ./.github/workflows/azure-main-dns.yml
+    needs: create-main-dns-rg
+    with:
+      baseDomain: ${{ github.event.inputs.baseDomain }}
+      domainPrefix: ${{ github.event.inputs.domainPrefix }}
+      resourceGroupName: main-workshop-dns
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-vnet:
+    uses: ./.github/workflows/azure-virtual-network.yml
+    needs: create-participant-rg
+    with:
+      virtualNetworkCidr: 10.1.0.0/16
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      operatorSubnetCidr: 10.1.0.0/24
+      aksSubnetCidr: 10.1.1.0/24
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-acr:
+    uses: ./.github/workflows/azure-container-registry.yml
+    needs: create-participant-rg
+    with:
+      registryName: participant${{ github.event.inputs.participantNumber }}registry
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-child-dns:
+    uses: ./.github/workflows/azure-child-dns.yml
+    needs: ['create-participant-rg','create-main-dns-zone']
+    with:
+      baseDomain: "${{ github.event.inputs.domainPrefix }}.${{ github.event.inputs.baseDomain }}"
+      domainPrefix: participant-${{ github.event.inputs.participantNumber }}
+      mainResourceGroup: main-workshop-dns
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-aks:
+    uses: ./.github/workflows/azure-k8s-cluster.yml
+    needs: create-vnet
+    with:
+      aksNodes: ${{ github.event.inputs.aksNodes }}
+      aksNodeType: ${{ github.event.inputs.aksNodeType }}
+      aksNodeDiskSize: "80"
+      suffix: ${{ needs.create-vnet.outputs.vnet_suffix}}
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-bastion:
+    uses: ./.github/workflows/azure-bastion.yml
+    needs: create-vnet
+    with:
+      vmName: participant-${{ github.event.inputs.participantNumber }}-bastion
+      suffix: ${{ needs.create-vnet.outputs.vnet_suffix}}
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      sigRgName: ${{ github.event.inputs.sigResourceGroup }}
+      imageName: k8stoolsetvm
+      imageVersion: latest
+      sharedGalleryName: toolsetvms
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  create-key-vault:
+    uses: ./.github/workflows/azure-keyvault.yml
+    needs: create-participant-rg
+    with:
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+
+  update-kv-secrets:
+    uses: ./.github/workflows/azure-keyvault-secrets.yml
+    needs: [create-bastion,create-acr,create-key-vault,create-aks]
+    with:
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      vaultName: ${{ needs.create-key-vault.outputs.vault_name}}
+      stateName: e2e
+      action: create
+    secrets:
+      secretMap: '{"acr-user":"${{ needs.create-acr.outputs.acr_admin_username}}","acr-password":"${{ needs.create-acr.outputs.acr_admin_password}}","bastion-b64-private-key":"${{ needs.create-bastion.outputs.b64_private_openssh_key}}","base64-kubeconfig":"${{ needs.create-aks.outputs.base64_kubeconfig}}"}'
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+
+  b64-script:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      bastion_script: ${{ steps.b64.outputs.bastion_script }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+    - name: b64 script
+      id: b64
+      run: |
+          bastion_script=$(cat scripts/fetch-creds-on-bastion.sh | base64 -w 0)
+          echo "::set-output name=bastion_script::${bastion_script}"
+
+  run-script:
+    uses: ./.github/workflows/azure-vm-script.yml
+    needs: [b64-script,update-kv-secrets]
+    with:
+      script: ${{ needs.b64-script.outputs.bastion_script}}
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      vmName: participant-${{ github.event.inputs.participantNumber }}-bastion
+      action: create
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

@@ -15,4 +15,6 @@ for rg in $groups; do
     ipaddr=$(az vm show -d -g $rg -n $rg-bastion --query publicIps | jq -r)
     kv=$(az keyvault list -g $rg | jq -r '.[0].name')
     az keyvault secret show --name bastion-b64-private-key --vault-name $kv | jq -r .value | base64 -d > workshop-sshkeys/$rg-bastion.$ipaddr.pem
+    chmod 600 ./workshop-sshkeys/$rg-bastion.$ipaddr.pem
 done
+

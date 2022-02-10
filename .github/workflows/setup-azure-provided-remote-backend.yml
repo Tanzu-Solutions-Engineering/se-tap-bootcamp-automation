@@ -1,0 +1,60 @@
+name: Setup Terraform Backend in Azure
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      resourceGroup:
+        description: 'The new resource group to create for the TF backend storage (e.g., tapworkshop)'
+        required: true
+      storageAccountName:
+        description: 'The Azure storage account name - must be unique across Azure (e.g., tapworksoptf)'
+        required: true
+      storageContainerName:
+        description: 'The Azure storage container name (e.g., tapworkshoptfstates)'
+        required: true
+jobs:
+
+  create-backend-storage:
+    runs-on: ubuntu-latest
+    env:
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      AZURE_RESOURCE_GROUP: ${{ github.event.inputs.resourceGroup }}
+      AZURE_STORAGE_ACCOUNT_NAME: ${{ github.event.inputs.storageAccountName }}
+      AZURE_STORAGE_CONTAINER_NAME: ${{ github.event.inputs.storageContainerName }}
+    steps:
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Azure CLI script file
+      uses: azure/CLI@v1
+      with:
+        inlineScript: |
+          chmod +x $GITHUB_WORKSPACE/scripts/setup-azure-provided-remote-backend.sh
+          $GITHUB_WORKSPACE/scripts/setup-azure-provided-remote-backend.sh
+
+  add-backend-config-as-secrets:
+    runs-on: ubuntu-latest
+    needs: create-backend-storage
+    steps:
+    - uses: gliech/create-github-secret-action@v1
+      with:
+        name: TF_BACKEND_resource_group_name
+        value: ${{ github.event.inputs.resourceGroup }}
+        pa_token: ${{ secrets.PA_TOKEN }}
+    - uses: gliech/create-github-secret-action@v1
+      with:
+        name: TF_BACKEND_storage_account_name
+        value: ${{ github.event.inputs.storageAccountName }}
+        pa_token: ${{ secrets.PA_TOKEN }}
+    - uses: gliech/create-github-secret-action@v1
+      with:
+        name: TF_BACKEND_storage_container_name
+        value: ${{ github.event.inputs.storageContainerName }}
+        pa_token: ${{ secrets.PA_TOKEN }}

@@ -1,0 +1,99 @@
+name: 'Administer Run Script on VM'
+
+on:
+  workflow_call:
+    inputs:
+      script:
+        description: 'base64 encoded script to run on the machine'
+        required: true
+        type: string
+      vmName:
+        description: 'name of the Vm to run the script on'
+        required: true
+        type: string
+      resourceGroupName:
+        description: 'the resource group to provision the main DNS zone in'
+        required: true
+        type: string
+      action:
+        required: true
+        type: string
+        description: destroy or create
+    secrets:
+      AZURE_AD_CLIENT_ID:
+        required: true
+      AZURE_AD_CLIENT_SECRET:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      AZURE_AD_TENANT_ID:
+        required: true
+      AZURE_REGION:
+        required: true
+      TF_BACKEND_resource_group_name:
+        required: true
+      TF_BACKEND_storage_account_name:
+        required: true
+      TF_BACKEND_storage_container_name:
+        required: true
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    env:
+      #Azure connection vars for TF
+      ARM_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      #TF vars
+      TF_VAR_vm_name: ${{ inputs.vmName }}
+      TF_VAR_script: ${{ inputs.script }}
+      TF_VAR_resource_group_name: ${{ inputs.resourceGroupName }}
+
+    runs-on: ubuntu-latest
+    environment: production
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform/azure/vm-script
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Install the latest version of Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+
+    - name: Generate backend configuration
+      run: |
+          cp ../backend/backend.tf .
+          echo "resource_group_name = \"${{ secrets.TF_BACKEND_resource_group_name }}\"" > config.azurerm.tfbackend
+          echo "storage_account_name = \"${{ secrets.TF_BACKEND_storage_account_name }}\"" >> config.azurerm.tfbackend
+          echo "container_name = \"${{ secrets.TF_BACKEND_storage_container_name }}\"" >> config.azurerm.tfbackend
+          echo "key = \"${{ inputs.resourceGroupName }}.script.tfstate\"" >> config.azurerm.tfbackend
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init -backend-config=./config.azurerm.tfbackend
+
+    # Checks that all Terraform configuration files adhere to a canonical format
+    - name: Terraform Format
+      run: terraform fmt -check
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      if: inputs.action == 'create'
+      run: terraform plan
+
+    - name: Terraform Apply
+      if: inputs.action == 'create'
+      run: terraform apply -auto-approve
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      run: terraform destroy -auto-approve

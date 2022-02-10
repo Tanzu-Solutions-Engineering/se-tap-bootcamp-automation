@@ -1,0 +1,27 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "terraform"
+    directory: |
+      terraform/azure/all-in-one
+      terraform/azure/backend
+      terraform/azure/bastion
+      terraform/azure/child-dns
+      terraform/azure/main-dns
+      terraform/azure/cluster
+      terraform/azure/compute-gallery
+      terraform/azure/keyvault
+      terraform/azure/keyvault-secrets
+      terraform/azure/resource-group
+      terraform/azure/virtual-network
+      terraform/azure/vm-script
+    schedule:
+      interval: "daily"

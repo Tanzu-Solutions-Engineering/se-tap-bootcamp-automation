@@ -1,0 +1,49 @@
+name: 'Dispatched Azure Kubernetes Cluster'
+
+on:
+  workflow_dispatch:
+    inputs:
+      resourceGroupName:
+        description: 'The resource group to provision the cluster in'
+        required: true
+      aksNodes:
+        description: 'Minimum number of nodes'
+        required: true
+        default: "3"
+      aksNodeType:
+        description: 'VM type to use for the nodes'
+        required: true
+      aksNodeDiskSize:
+        description: 'Disk size for the node in GB'
+        required: true
+        default: "80"
+      suffix:
+        description: 'A Virtual Network suffix.  Used for looking up the subnet where cluster nodes will be running.'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: destroy or create
+        options:
+        - create
+        - destroy
+
+jobs:
+  create-aks:
+    uses: ./.github/workflows/azure-k8s-cluster.yml
+    with:
+      aksNodes: ${{ github.event.inputs.aksNodes }}
+      aksNodeType: ${{ github.event.inputs.aksNodeType }}
+      aksNodeDiskSize: ${{ github.event.inputs.aksNodeDiskSize }}
+      suffix: ${{ github.event.inputs.suffix }}
+      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

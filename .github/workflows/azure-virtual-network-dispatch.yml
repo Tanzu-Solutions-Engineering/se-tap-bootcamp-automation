@@ -1,0 +1,43 @@
+name: 'Dispatched Azure Virtual Network'
+
+on:
+  workflow_dispatch:
+    inputs:
+      resourceGroupName:
+        description: 'The name of an existing resource group'
+        required: true
+      virtualNetworkCidr:
+        description: 'The Virtual Network CIDR block (e.g., 10.1.0.0/16)'
+        required: true
+      operatorSubnetCidr:
+        description: 'The Subnet CIDR block for operator resources (e.g., 10.1.0.0/24)'
+        required: true
+      aksSubnetCidr:
+        description: 'The Subnet CIDR block hosting AKS cluster (e.g., 10.1.1.0/24)'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: Create (new) or destroy (existing)
+        options:
+        - create
+        - destroy
+
+jobs:
+  create-vnet:
+    uses: ./.github/workflows/azure-virtual-network.yml
+    with:
+      virtualNetworkCidr: ${{ github.event.inputs.virtualNetworkCidr }}
+      resourceGroupName: ${{ github.event.inputs.participantNumber }}
+      operatorSubnetCidr: ${{ github.event.inputs.operatorSubnetCidr }}
+      aksSubnetCidr: ${{ github.event.inputs.aksSubnetCidr }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

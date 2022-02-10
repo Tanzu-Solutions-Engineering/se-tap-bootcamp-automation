@@ -1,0 +1,120 @@
+name: "Destroy a participant's Workshop Environment (targeting Azure)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseDomain:
+        description: 'New DNS zone name to create (e.g., example.com)'
+        required: true
+      domainPrefix:
+        description: 'The subdomain name to create on the base domain, (e.g., tap-workshop)'
+        required: true
+      participantNumber:
+        description: 'Participant ID (any positive integer)'
+        required: true
+      aksNodes:
+        description: 'Minimum number of cluster worker nodes'
+        required: true
+        default: "3"
+      aksNodeType:
+        description: 'VM type to use for the nodes'
+        required: true
+      sigResourceGroup:
+        description: "the name of the resource group the shared image gallery is in"
+        required: true
+      destroyCoreComponents:
+        description: Whether or not to also destroy the non participant scoped resources (e.g., shared gallery, dns)
+        required: true
+        type: choice
+        options:
+        - 'no'
+        - 'yes'
+
+#Would be nice to use env vars but this doesn't work
+#https://github.com/actions/runner/issues/480
+# env:
+#   bastionName: participant-${{ github.event.inputs.participantNumber }}-vm
+#   mainDnsRg: main-workshop-dns
+#   participantRg: participant-${{ github.event.inputs.participantNumber }}
+#   action: create
+
+jobs:
+# we need to destroy key vault due to soft deletes hanging around
+  destroy-key-vault:
+    uses: ./.github/workflows/azure-keyvault.yml
+    with:
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: destroy
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  destroy-child-dns:
+    uses: ./.github/workflows/azure-child-dns.yml
+    with:
+      baseDomain: "${{ github.event.inputs.domainPrefix }}.${{ github.event.inputs.baseDomain }}"
+      domainPrefix: participant-${{ github.event.inputs.participantNumber }}
+      mainResourceGroup: main-workshop-dns
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: destroy
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  destroy-participant-rg:
+    uses: ./.github/workflows/azure-resource-group.yml
+    needs: [destroy-child-dns,destroy-key-vault]
+    with:
+      resourceGroupName: participant-${{ github.event.inputs.participantNumber }}
+      action: destroy
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  destroy-main-dns-rg:
+    if:  github.event.inputs.destroyCoreComponents == 'yes'
+    uses: ./.github/workflows/azure-resource-group.yml
+    with:
+      resourceGroupName: main-workshop-dns
+      action: destroy
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
+  
+  destroy-gallery-rg:
+    uses: ./.github/workflows/azure-resource-group.yml
+    # needs: destroy-shared-gallery-image-def
+    if:  github.event.inputs.destroyCoreComponents == 'yes'
+    with:
+      resourceGroupName: ${{ github.event.inputs.sigResourceGroup }}
+      action: destroy
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

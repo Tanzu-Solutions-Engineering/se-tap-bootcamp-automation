@@ -1,0 +1,146 @@
+name: 'Administer Azure Compute Gallery'
+
+on:
+  workflow_call:
+    inputs:
+      resourceGroupName:
+        description: 'The name of an existing resource group'
+        required: true
+        type: string
+      imageName:
+        description: 'Name of the image definition to create for the bastion image'
+        required: true
+        type: string
+      galleryName:
+        description: 'Name of the gallery'
+        required: true
+        type: string
+      imagePublisher:
+        description: 'Publisher name for the image definition'
+        required: true
+        type: string
+      imageOffer:
+        description: 'Offer name for the image definition'
+        required: true
+        type: string
+      imageSku:
+        description: 'SKU name for the image definition'
+        required: true
+        type: string
+      action:
+        required: true
+        type: string
+        description: Create (new) or destroy (existing)
+    secrets:
+      AZURE_AD_CLIENT_ID:
+        required: true
+      AZURE_AD_CLIENT_SECRET:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      AZURE_AD_TENANT_ID:
+        required: true
+      AZURE_REGION:
+        required: true
+      TF_BACKEND_resource_group_name:
+        required: true
+      TF_BACKEND_storage_account_name:
+        required: true
+      TF_BACKEND_storage_container_name:
+        required: true
+    outputs:
+      gallery_name:
+        value: ${{ jobs.terraform.outputs.gallery_name }}
+      image_name:
+        value: ${{ jobs.terraform.outputs.image_name }}
+      image_sku:
+        value: ${{ jobs.terraform.outputs.image_sku }}
+      image_offer:
+        value: ${{ jobs.terraform.outputs.image_offer }}
+      image_publisher:
+        value: ${{ jobs.terraform.outputs.image_publisher }}
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    env:
+      #azure backend connection vars
+      ARM_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      TF_VAR_resource_group_name: ${{ inputs.resourceGroupName }}
+      TF_VAR_gallery_name: ${{ inputs.galleryName }}
+      TF_VAR_image_name: ${{ inputs.imageName }}
+      TF_VAR_image_sku: ${{ inputs.imageSku }}
+      TF_VAR_image_offer: ${{ inputs.imageOffer }}
+      TF_VAR_image_publisher: ${{ inputs.imagePublisher }}
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      gallery_name: ${{ steps.set_outputs.outputs.gallery_name }}
+      image_name: ${{ steps.set_outputs.outputs.image_name }}
+      image_sku: ${{ steps.set_outputs.outputs.image_sku }}
+      image_offer: ${{ steps.set_outputs.outputs.image_offer }}
+      image_publisher: ${{ steps.set_outputs.outputs.image_publisher }}
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform/azure/compute-gallery
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Install the latest version of Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_wrapper: false
+
+    - name: Generate backend configuration
+      run: |
+          cp ../backend/backend.tf .
+          echo "resource_group_name = \"${{ secrets.TF_BACKEND_resource_group_name }}\"" > config.azurerm.tfbackend
+          echo "storage_account_name = \"${{ secrets.TF_BACKEND_storage_account_name }}\"" >> config.azurerm.tfbackend
+          echo "container_name = \"${{ secrets.TF_BACKEND_storage_container_name }}\"" >> config.azurerm.tfbackend
+          echo "key = \"${{ inputs.resourceGroupName }}.gallery.tfstate\"" >> config.azurerm.tfbackend
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init -backend-config=./config.azurerm.tfbackend
+
+    # Checks that all Terraform configuration files adhere to a canonical format
+    - name: Terraform Format
+      run: terraform fmt -check
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      if: inputs.action != 'destroy'
+      run: terraform plan
+
+    - name: Terraform Apply
+      if: inputs.action != 'destroy'
+      run: terraform apply -auto-approve
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      run: terraform destroy -auto-approve
+
+    - name: Set Outputs
+      id: set_outputs
+      if: inputs.action != 'destroy'
+      run: |
+        gallery_name=$(terraform output --raw gallery_name)
+        echo "::set-output name=gallery_name::${gallery_name}"
+        image_name=$(terraform output --raw image_name)
+        echo "::set-output name=image_name::${image_name}"
+        image_sku=$(terraform output --raw image_sku)
+        echo "::set-output name=image_sku::${image_sku}"
+        image_offer=$(terraform output --raw image_offer)
+        echo "::set-output name=image_offer::${image_offer}"
+        image_publisher=$(terraform output --raw image_publisher)
+        echo "::set-output name=image_publisher::${image_publisher}"

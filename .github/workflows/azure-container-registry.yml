@@ -1,0 +1,127 @@
+name: 'Administer Azure Container Registry'
+
+on:
+  workflow_call:
+    inputs:
+      resourceGroupName:
+        description: 'The resource group to provision the registry in'
+        required: true
+        type: string
+      registryName:
+        description: 'The name of the ACR registry, this can only be alphanumeric'
+        required: true
+        type: string
+      action:
+        required: true
+        type: string
+        description: destroy or create
+    secrets:
+      AZURE_AD_CLIENT_ID:
+        required: true
+      AZURE_AD_CLIENT_SECRET:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      AZURE_AD_TENANT_ID:
+        required: true
+      AZURE_REGION:
+        required: true
+      TF_BACKEND_resource_group_name:
+        required: true
+      TF_BACKEND_storage_account_name:
+        required: true
+      TF_BACKEND_storage_container_name:
+        required: true
+    outputs:
+      acr_id:
+        value: ${{ jobs.terraform.outputs.acr_id }}
+      acr_name:
+        value: ${{ jobs.terraform.outputs.acr_name }}
+      acr_url:
+        value: ${{ jobs.terraform.outputs.acr_url }}
+      acr_admin_username:
+        value: ${{ jobs.terraform.outputs.acr_admin_username }}
+      acr_admin_password:
+        value: ${{ jobs.terraform.outputs.acr_admin_password }}
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      #TF vars
+      TF_VAR_resource_group_name: "${{ inputs.resourceGroupName }}"
+      TF_VAR_az_region: ${{ secrets.AZURE_REGION }}
+      TF_VAR_registry_name: "${{ inputs.registryName }}"
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      acr_id: ${{ steps.set_outputs.outputs.acr_id }}
+      acr_name: ${{ steps.set_outputs.outputs.acr_name }}
+      acr_url: ${{ steps.set_outputs.outputs.acr_url }}
+      acr_admin_username: ${{ steps.set_outputs.outputs.acr_admin_username }}
+      acr_admin_password: ${{ steps.set_outputs.outputs.acr_admin_password }}
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform/azure/registry
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Install the latest version of Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_wrapper: false
+
+    - name: Generate backend configuration
+      run: |
+          cp ../backend/backend.tf .
+          echo "resource_group_name = \"${{ secrets.TF_BACKEND_resource_group_name }}\"" > config.azurerm.tfbackend
+          echo "storage_account_name = \"${{ secrets.TF_BACKEND_storage_account_name }}\"" >> config.azurerm.tfbackend
+          echo "container_name = \"${{ secrets.TF_BACKEND_storage_container_name }}\"" >> config.azurerm.tfbackend
+          echo "key = \"${{ inputs.resourceGroupName }}.registry.tfstate\"" >> config.azurerm.tfbackend
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init -backend-config=./config.azurerm.tfbackend
+
+    # Checks that all Terraform configuration files adhere to a canonical format
+    - name: Terraform Format
+      run: terraform fmt -check
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      if: inputs.action != 'destroy'
+      run: terraform plan
+
+    - name: Terraform Apply
+      if: inputs.action != 'destroy'
+      run: terraform apply -auto-approve
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      run: terraform destroy -auto-approve
+
+    - name: Set Outputs
+      id: set_outputs
+      if: inputs.action != 'destroy'
+      run: |
+        acr_id=$(terraform output --raw acr_id)
+        echo "::set-output name=acr_id::${acr_id}"
+        acr_name=$(terraform output --raw acr_name)
+        echo "::set-output name=acr_name::${acr_name}"
+        acr_url=$(terraform output --raw acr_url)
+        echo "::set-output name=acr_url::${acr_url}"
+        acr_admin_username=$(terraform output --raw acr_admin_username)
+        echo "::set-output name=acr_admin_username::${acr_admin_username}"
+        acr_admin_password=$(terraform output --raw acr_admin_password)
+        echo "::set-output name=acr_admin_password::${acr_admin_password}"

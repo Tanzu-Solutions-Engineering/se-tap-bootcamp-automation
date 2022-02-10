@@ -1,0 +1,36 @@
+name: 'Dispatched Azure Container Registry'
+
+on:
+  workflow_call:
+
+  workflow_dispatch:
+    inputs:
+      resourceGroupName:
+        description: 'The resource group to provision the registry in'
+        required: true
+      registryName:
+        description: 'The name of the ACR registry, this can only be alphanumeric'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: destroy or create
+        options:
+        - create
+        - destroy
+jobs:
+  create-acr:
+    uses: ./.github/workflows/azure-container-registry.yml
+    with:
+      registryName: ${{ github.event.inputs.registryName }}
+      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

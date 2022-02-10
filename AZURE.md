@@ -51,6 +51,7 @@ Then run the following script found [here](./scripts/create-azure-service-princi
 > In this case we use the `Owner` role. This is needed to manage RBAC. Also note that for the SP to work with the Github Actions using the Azure CLI, the `--sdk-auth` flag which is deprecated is still needed.  This is due to how the Github Action functions.
 
 The output of this script will be a JSON block of credentials to be used in the following steps.
+> Note: Store the output of the service principal creation securely. It contains credentials with elevated permissions within your subscription.
 
 ### Setup a Personal Access Token in Github
 
@@ -135,7 +136,12 @@ All Credentials are stored in Azure Key Vault. There is a KV per resource group 
 
 There is only one credential that needs to be pulled down to get started, all other credentials will be accessible from the bastion host. This credential is the private ssh key for the bastion host. If you are the workshop owner and working in a multi-tenant environment you will need to hand this credential out to each participant. From there each participant will be able to access everything they need from the bastion host.
 
-Run the script to pull down all private keys along with the IP address of the bastion that it is associated with. This will create a folder `workshop-keys` and loop over each resource group that matches `participant-x` it will then get the bastion IP and the ssh key from vault and write a file out into the directory with SSH key in it and ip in the name (e.g, `participant-x-bastion.172.16.78.9.pem`)
+First, log into Azure using the service principal you created earlier.
+```
+az login --service-principal -u <clientID> -p <clientSecret> --tenant <tenantId>
+```
+
+Then, run the script to pull down all private keys along with the IP address of the bastion that it is associated with. This will create a folder `workshop-sshkeys` and loop over each resource group that matches `participant-x` it will then get the bastion IP and the ssh key from vault and write a file out into the directory with SSH key in it and ip in the name (e.g, `participant-x-bastion.172.16.78.9.pem`).
 
 ```
 ./scripts/fetch-ssh-key.sh

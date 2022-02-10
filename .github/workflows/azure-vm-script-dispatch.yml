@@ -1,0 +1,42 @@
+name: 'Dispatched Run Script on VM'
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: 'base64 encoded script to run on the machine'
+        required: true
+        type: string
+      vmName:
+        description: 'name of the Vm to run the script on'
+        required: true
+        type: string
+      resourceGroupName:
+        description: 'the resource group to provision the main DNS zone in'
+        required: true
+        type: string
+      action:
+        required: true
+        type: choice
+        description: Create (new) or destroy (existing)
+        options:
+        - create
+        - destroy
+
+jobs:
+  run-script:
+    uses: ./.github/workflows/azure-vm-script.yml
+    with:
+      script: ${{ github.event.inputs.script }}
+      resourceGroupName: ${{ github.event.inputs.participantNumber }}
+      vmName: ${{ github.event.inputs.vmName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

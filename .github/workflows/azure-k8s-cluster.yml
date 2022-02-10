@@ -1,0 +1,131 @@
+name: 'Administer Azure Kubernetes Cluster'
+
+on:
+  workflow_call:
+    inputs:
+      resourceGroupName:
+        description: 'The resource group to provision the cluster in'
+        required: true
+        type: string
+      aksNodes:
+        description: 'Minimum number of nodes'
+        required: true
+        default: "3"
+        type: string
+      aksNodeType:
+        description: 'VM type to use for the nodes'
+        required: true
+        type: string
+      aksNodeDiskSize:
+        description: 'Disk size for the node in GB'
+        required: true
+        default: "80"
+        type: string
+      suffix:
+        description: 'A Virtual Network suffix.  Used for looking up the subnet where cluster nodes will be running.'
+        required: true
+        type: string
+      action:
+        required: true
+        type: string
+    secrets:
+      AZURE_AD_CLIENT_ID:
+        required: true
+      AZURE_AD_CLIENT_SECRET:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      AZURE_AD_TENANT_ID:
+        required: true
+      AZURE_REGION:
+        required: true
+      TF_BACKEND_resource_group_name:
+        required: true
+      TF_BACKEND_storage_account_name:
+        required: true
+      TF_BACKEND_storage_container_name:
+        required: true
+    outputs:
+      aks_cluster_name:
+        description: "the name of the azure kubernetes service cluster"
+        value: ${{ jobs.terraform.outputs.aks_cluster_name }}
+      base64_kubeconfig:
+        description: "the contents of the AKS cluster kubeconfig file"
+        value: ${{ jobs.terraform.outputs.base64_kubeconfig }}
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    env:
+      #Azure TF connection vars
+      ARM_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      #TF vars
+      TF_VAR_resource_group_name: "${{ inputs.resourceGroupName }}"
+      TF_VAR_aks_nodes: "${{ inputs.aksNodes }}"
+      TF_VAR_aks_node_type: "${{ inputs.aksNodeType }}"
+      TF_VAR_aks_node_disk_size: "${{ inputs.aksNodeDiskSize }}"
+      TF_VAR_suffix: "${{ inputs.suffix }}"
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      aks_cluster_name: ${{ steps.set_outputs.outputs.aks_cluster_name }}
+      base64_kubeconfig: ${{ steps.set_outputs.outputs.base64_kubeconfig }}
+
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform/azure/cluster
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    # Install the latest version of Terraform CLI
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_wrapper: false
+
+    - name: Generate backend configuration
+      run: |
+          cp ../backend/backend.tf .
+          echo "resource_group_name = \"${{ secrets.TF_BACKEND_resource_group_name }}\"" > config.azurerm.tfbackend
+          echo "storage_account_name = \"${{ secrets.TF_BACKEND_storage_account_name }}\"" >> config.azurerm.tfbackend
+          echo "container_name = \"${{ secrets.TF_BACKEND_storage_container_name }}\"" >> config.azurerm.tfbackend
+          echo "key = \"${{ inputs.resourceGroupName }}.cluster.tfstate\"" >> config.azurerm.tfbackend
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: terraform init -backend-config=./config.azurerm.tfbackend
+
+    # Checks that all Terraform configuration files adhere to a canonical format
+    - name: Terraform Format
+      run: terraform fmt -check
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      if: inputs.action != 'destroy'
+      run: terraform plan
+
+    - name: Terraform Apply
+      if: inputs.action != 'destroy'
+      run: terraform apply -auto-approve
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      run: terraform destroy -auto-approve
+
+    - name: Set Outputs
+      id: set_outputs
+      if: inputs.action != 'destroy'
+      run: |
+        aks_cluster_name=$(terraform output --raw aks_cluster_name)
+        echo "::set-output name=aks_cluster_name::${aks_cluster_name}"
+        base64_kubeconfig=$(terraform output --raw contents_of_kubeconfig | base64 -w 0)
+        echo "::set-output name=base64_kubeconfig::${base64_kubeconfig}"

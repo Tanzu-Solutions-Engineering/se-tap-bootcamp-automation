@@ -1,0 +1,31 @@
+name: 'Dispatched Azure KeyVault'
+
+on:
+  workflow_dispatch:
+    inputs:
+      resourceGroupName:
+        description: 'The name of the resource group to create the kv in'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: Create (new) or destroy (existing)
+        options:
+        - create
+        - destroy
+
+jobs:
+  create-key-vault:
+    uses: ./.github/workflows/azure-keyvault.yml
+    with:
+      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

@@ -1,0 +1,39 @@
+name: 'Dispatched (Main) Azure DNS Zone'
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseDomain:
+        description: 'New DNS zone name to create (e.g., example.com)'
+        required: true
+      domainPrefix:
+        description: 'The subdomain name to create on the base domain, (e.g., tap-workshop)'
+        required: true
+      resourceGroupName:
+        description: 'The resource group to provision the main DNS zone in'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: destroy or create
+        options:
+        - create
+        - destroy
+
+jobs:
+  create-main-dns-zone:
+    uses: ./.github/workflows/azure-main-dns.yml
+    with:
+      baseDomain: ${{ github.event.inputs.baseDomain }}
+      domainPrefix: ${{ github.event.inputs.domainPrefix }}
+      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}

@@ -1,0 +1,43 @@
+name: 'Dispatched (Participant) Azure DNS Zone'
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      baseDomain:
+        description: 'Base domain to create new zone under (e.g., tap-workshop.example.com)'
+        required: true
+      domainPrefix:
+        description: 'The prefix to use as the subdomain for the child zone (e.g., participant-1)'
+        required: true
+      resourceGroupName:
+        description: 'The resource group to create the child zone in (e.g., participant-1)'
+        required: true
+      mainResourceGroup:
+        description: 'The resource group that the main DNS zone was created it.'
+        required: true
+      action:
+        required: true
+        type: choice
+        description: destroy or create
+        options:
+        - create
+        - destroy
+jobs:
+  create-child-dns:
+    uses: ./.github/workflows/azure-child-dns.yml
+    with:
+      baseDomain: ${{ github.event.inputs.baseDomain }}
+      domainPrefix: ${{ github.event.inputs.domainPrefix }}
+      mainResourceGroup: ${{ github.event.inputs.mainResourceGroup }}
+      resourceGroupName: ${{ github.event.inputs.resourceGroupName }}
+      action: ${{ github.event.inputs.action }}
+    secrets:
+      AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+      AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+      AZURE_REGION: ${{ secrets.AZURE_REGION }}
+      TF_BACKEND_resource_group_name: ${{ secrets.TF_BACKEND_resource_group_name }}
+      TF_BACKEND_storage_account_name: ${{ secrets.TF_BACKEND_storage_account_name }}
+      TF_BACKEND_storage_container_name:  ${{ secrets.TF_BACKEND_storage_container_name }}
