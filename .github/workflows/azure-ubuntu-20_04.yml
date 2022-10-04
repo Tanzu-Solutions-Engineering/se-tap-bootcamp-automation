@@ -48,7 +48,7 @@ jobs:
     needs: create-shared-gallery-image-def
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
 
       - name: Copy init.sh
         uses: canastro/copy-file-action@master
