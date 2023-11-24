@@ -81,7 +81,7 @@ jobs:
           target: "packer/azure/ubuntu/20_04/fetch-and-install-oci-cli.sh"
 
       - name: Use latest Packer
-        uses: hashicorp-contrib/setup-packer@v1
+        uses: hashicorp-contrib/setup-packer@v3
         with:
           packer-version: 1.7.3
 
